@@ -121,10 +121,9 @@ command and remove only the plugin.
 
 ## Development
 
-Clone the repository and run the release checks:
+From a local repository checkout, run the release checks:
 
 ```bash
-git clone https://github.com/OddlyCrusty/omakeybinds.git
 cd omakeybinds
 ./scripts/check.sh
 ```
