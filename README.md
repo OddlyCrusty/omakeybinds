@@ -18,6 +18,7 @@ you can see what is standard, what changed, and what you added yourself.
 - Filters for **Default**, **Changed**, **Custom**, and **Deleted** shortcuts.
 - A `✦` marker on changed and custom entries.
 - In-place shortcut editing with physical key capture.
+- Two-step shortcut deletion from the shortcut editor.
 - Conflict warnings that name the actions already using a key; replacement
   requires explicit confirmation.
 - A settings menu with a separately confirmed reset to current Omarchy defaults.
@@ -77,6 +78,16 @@ actions and keeps Apply blocked until you acknowledge the replacement.
 Some multi-action or dynamically generated bindings are displayed but are not
 editable. This prevents one edit from silently removing sibling actions bound
 to the same key.
+
+### Delete a shortcut
+
+Select an editable row, choose **Delete shortcut**, then choose **Confirm
+delete**. The shortcut is safely unbound and remains available in the
+**Deleted** filter so the change is easy to identify.
+
+Select a shortcut in the **Deleted** view to restore it. OmaKeybinds proposes
+its previous key combination. If that key is already occupied, restoration is
+blocked and the dialog asks you to press a different combination.
 
 ### Reset every shortcut
 

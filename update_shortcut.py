@@ -62,12 +62,13 @@ def managed_block(overrides: list[dict[str, str]]) -> str:
         current = normalize_key(item["current_key"])
         lines.extend([
             "",
-            f'-- {item["description"]}: {original} -> {current}',
+            f'-- {item["description"]}: {original} -> {"deleted" if item.get("kind") == "deleted" else current}',
             f"hl.unbind({lua_string(original)})",
         ])
         if current != original:
             lines.append(f"hl.unbind({lua_string(current)})")
-        lines.append(f'o.bind({lua_string(current)}, {lua_string(item["description"])}, {item["action"]})')
+        if item.get("kind") != "deleted":
+            lines.append(f'o.bind({lua_string(current)}, {lua_string(item["description"])}, {item["action"]})')
     lines.extend([END, ""])
     return "\n".join(lines)
 
@@ -103,7 +104,8 @@ def main() -> int:
     parser.add_argument("--new-key", required=True)
     parser.add_argument("--description", required=True)
     parser.add_argument("--action", required=True)
-    parser.add_argument("--kind", choices=("changed", "custom"), required=True)
+    parser.add_argument("--kind", choices=("default", "changed", "custom", "deleted"), required=True)
+    parser.add_argument("--previous-kind", choices=("default", "changed", "custom"), default="")
     args = parser.parse_args()
 
     original = normalize_key(args.origin_key)
@@ -119,7 +121,8 @@ def main() -> int:
     state = load_state()
     overrides: list[dict[str, str]] = state["overrides"]  # type: ignore[assignment]
     override_id = args.id or hashlib.sha256(f"{original}\0{args.description}\0{args.action}".encode()).hexdigest()[:16]
-    previous = f"{original} — {args.description}"
+    existing = next((item for item in overrides if item.get("id") == override_id), None)
+    previous = existing.get("previous", f"{original} — {args.description}") if existing else f"{original} — {args.description}"
     entry = {
         "id": override_id,
         "original_key": original,
@@ -129,6 +132,8 @@ def main() -> int:
         "kind": args.kind,
         "previous": previous,
     }
+    if args.kind == "deleted":
+        entry["previous_kind"] = args.previous_kind or (existing.get("kind", "changed") if existing else "changed")
     overrides = upsert_override(overrides, entry)
     state["overrides"] = overrides
 
@@ -157,7 +162,8 @@ def main() -> int:
         print(json.dumps({"ok": False, "message": f"Change rolled back: {error}"}))
         return 1
 
-    print(json.dumps({"ok": True, "message": f"Changed {old} to {new}", "backup": str(backup)}))
+    message = f"Deleted {old}" if args.kind == "deleted" else f"Changed {old} to {new}"
+    print(json.dumps({"ok": True, "message": message, "backup": str(backup)}))
     return 0
 
 

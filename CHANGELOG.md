@@ -3,6 +3,15 @@
 All notable changes are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-09-26
+
+### Added
+
+- Two-step shortcut deletion from the row editor, with deleted custom
+  shortcuts retained in the Deleted view.
+- Restoration by selecting a deleted shortcut, with conflicting keys blocked
+  until the user chooses a free combination.
+
 ## [1.0.3] - 2026-09-26
 
 ### Changed
@@ -35,6 +44,7 @@ All notable changes are documented here. This project follows
 - Theme-aware in-shell logo and standalone project artwork.
 - Backups, post-write Hyprland validation, automatic rollback, and managed-only cleanup.
 
+[1.1.0]: https://github.com/OddlyCrusty/omakeybinds/releases/tag/v1.1.0
 [1.0.3]: https://github.com/OddlyCrusty/omakeybinds/releases/tag/v1.0.3
 [1.0.2]: https://github.com/OddlyCrusty/omakeybinds/releases/tag/v1.0.2
 [1.0.1]: https://github.com/OddlyCrusty/omakeybinds/releases/tag/v1.0.1

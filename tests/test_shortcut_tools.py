@@ -87,6 +87,71 @@ class UpdaterTests(unittest.TestCase):
         entry = {"id": "first", "current_key": "SUPER + G"}
         self.assertEqual(updater.upsert_override(existing, entry), [entry])
 
+    def test_deleted_override_only_unbinds_shortcut(self):
+        block = updater.managed_block([{
+            "original_key": "SUPER + F",
+            "current_key": "SUPER + F",
+            "description": "Full screen",
+            "action": "action()",
+            "kind": "deleted",
+        }])
+        self.assertIn('hl.unbind("SUPER + F")', block)
+        self.assertNotIn("o.bind(", block)
+
+
+class DeletedShortcutTests(unittest.TestCase):
+    def test_managed_custom_deletion_remains_visible(self):
+        custom = scanner.Binding("SUPER + G", "My shortcut", source="bindings.lua", action='"my-command"')
+        managed = {
+            "id": "deleted-one",
+            "original_key": "SUPER + G",
+            "current_key": "SUPER + G",
+            "description": "My shortcut",
+            "action": '"my-command"',
+            "kind": "deleted",
+            "previous": "SUPER + G — My shortcut",
+        }
+        with mock.patch.object(scanner, "default_bindings", return_value=[]), \
+             mock.patch.object(scanner, "current_runtime_bindings", return_value=[]), \
+             mock.patch.object(scanner, "managed_overrides", return_value=[managed]), \
+             mock.patch.object(scanner, "read", return_value='o.bind("SUPER + G", "My shortcut", "my-command")\nhl.unbind("SUPER + G")'):
+            result = scanner.build()
+        self.assertEqual(result["counts"]["deleted"], 1)
+        self.assertEqual(result["items"][0]["description"], "My shortcut")
+        self.assertTrue(result["items"][0]["editable"])
+        self.assertEqual(result["items"][0]["restoreKind"], "changed")
+
+    def test_changed_override_remains_active_without_runtime_data(self):
+        managed = {
+            "id": "changed-one",
+            "original_key": "SUPER + F",
+            "current_key": "SUPER + G",
+            "description": "Full screen",
+            "action": "action()",
+            "kind": "changed",
+            "previous": "SUPER + F — Full screen",
+        }
+        source = 'hl.unbind("SUPER + F")\nhl.unbind("SUPER + G")\no.bind("SUPER + G", "Full screen", action())'
+        with mock.patch.object(scanner, "default_bindings", return_value=[]), \
+             mock.patch.object(scanner, "current_runtime_bindings", return_value=[]), \
+             mock.patch.object(scanner, "managed_overrides", return_value=[managed]), \
+             mock.patch.object(scanner, "read", return_value=source):
+            result = scanner.build()
+        self.assertEqual(result["counts"]["changed"], 1)
+
+    def test_plain_deleted_default_can_be_restored(self):
+        default = scanner.Binding("SUPER + D", "Docker", source="test.lua", action='"docker"')
+        with mock.patch.object(scanner, "default_bindings", return_value=[default]), \
+             mock.patch.object(scanner, "current_runtime_bindings", return_value=[]), \
+             mock.patch.object(scanner, "managed_overrides", return_value=[]), \
+             mock.patch.object(scanner, "read", return_value='hl.unbind("SUPER + D")'):
+            result = scanner.build()
+        deleted = result["items"][0]
+        self.assertEqual(deleted["description"], "Docker")
+        self.assertEqual(deleted["action"], '"docker"')
+        self.assertTrue(deleted["editable"])
+        self.assertEqual(deleted["restoreKind"], "default")
+
 
 class ResetterTests(unittest.TestCase):
     def test_success_clears_managed_state_after_refresh_and_validation(self):

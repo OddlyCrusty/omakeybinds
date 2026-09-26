@@ -231,19 +231,25 @@ def build() -> dict[str, object]:
     for item in defaults:
         default_by_key.setdefault(item.key, []).append(item)
 
+    overrides = managed_overrides()
+    deleted_overrides = [item for item in overrides if item.get("kind") == "deleted"]
+    deleted_override_keys = {
+        normalize_key(item.get("current_key", "")) or normalize_key(item.get("original_key", ""))
+        for item in deleted_overrides
+    }
+
     runtime = current_runtime_bindings()
     if runtime:
         active = runtime
     else:
         active = [item for item in defaults if item.key not in set(unbound)]
-        active.extend(custom)
+        active.extend(item for item in custom if item.key not in deleted_override_keys)
 
     custom_by_pair = {(item.key, item.description): item for item in custom}
     defaults_by_pair = {(item.key, item.description): item for item in defaults}
     active_key_counts: dict[str, int] = {}
     for item in active:
         active_key_counts[item.key] = active_key_counts.get(item.key, 0) + 1
-    overrides = managed_overrides()
     override_by_pair = {(normalize_key(item.get("current_key", "")), item.get("description", "")): item for item in overrides}
     moved_origin_keys = {normalize_key(item.get("original_key", "")) for item in overrides if item.get("current_key") != item.get("original_key")}
     output: list[dict[str, object]] = []
@@ -283,23 +289,46 @@ def build() -> dict[str, object]:
             "originKey": managed.get("original_key", item.key) if managed else item.key,
         })
 
+    # Managed deletions retain their original description and action so the UI can
+    # explain exactly what was removed, including shortcuts that were custom.
+    for managed in deleted_overrides:
+        key = normalize_key(managed.get("current_key", "")) or normalize_key(managed.get("original_key", ""))
+        if not key or key in active_keys:
+            continue
+        output.append({
+            "key": key,
+            "description": managed.get("description", "Deleted"),
+            "command": "",
+            "source": USER_BINDINGS.name,
+            "status": "deleted",
+            "previous": managed.get("previous", ""),
+            "disabled": True,
+            "action": managed.get("action", ""),
+            "editable": bool(managed.get("action", "")),
+            "overrideId": managed.get("id", ""),
+            "originKey": managed.get("original_key", key),
+            "restoreKind": managed.get("previous_kind", "changed"),
+        })
+
     # An explicit unbind without a replacement is still an important changed shortcut.
     custom_keys = {item.key for item in custom}
     for key in unbound:
-        if key in default_by_key and key not in active_keys and key not in custom_keys and key not in moved_origin_keys:
+        if key in default_by_key and key not in active_keys and key not in custom_keys and key not in moved_origin_keys and key not in deleted_override_keys:
             originals = default_by_key[key]
+            restorable = len(originals) == 1 and bool(originals[0].action)
             output.append({
                 "key": key,
-                "description": "Deleted",
+                "description": originals[0].description if len(originals) == 1 else "Deleted",
                 "command": "",
                 "source": USER_BINDINGS.name,
                 "status": "deleted",
                 "previous": "; ".join(dict.fromkeys(item.description for item in originals)),
                 "disabled": True,
-                "action": "",
-                "editable": False,
+                "action": originals[0].action if len(originals) == 1 else "",
+                "editable": restorable,
                 "overrideId": "",
                 "originKey": key,
+                "restoreKind": "default",
             })
 
     unique: list[dict[str, object]] = []

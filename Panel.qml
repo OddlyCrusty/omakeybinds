@@ -30,10 +30,12 @@ Panel {
   property bool loading: false
   property string errorMessage: ""
   property bool editOpen: false
+  property string editMode: "edit"
   property var editItem: null
   property string editKey: ""
   property string editMessage: ""
   property bool saving: false
+  property bool deleteConfirm: false
   property bool conflictAccepted: false
   property bool filterMenuOpen: false
   property bool settingsOpen: false
@@ -92,11 +94,13 @@ Panel {
   }
 
   function startEdit(item) {
-    if (!item || !item.editable || item.disabled) return
+    if (!item || !item.editable) return
     editItem = item
+    editMode = item.disabled ? "restore" : "edit"
     editKey = item.key
     editMessage = ""
     conflictAccepted = false
+    deleteConfirm = false
     editOpen = true
     Qt.callLater(function() { keyCapture.forceActiveFocus() })
   }
@@ -107,6 +111,7 @@ Panel {
     editItem = null
     editMessage = ""
     conflictAccepted = false
+    deleteConfirm = false
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
@@ -164,7 +169,7 @@ Panel {
     var matches = []
     for (var i = 0; i < shortcuts.length; i++) {
       var item = shortcuts[i]
-      if (!item.disabled && item.key === key && (!editItem || item.key !== editItem.key || item.description !== editItem.description))
+      if (!item.disabled && item.key === key && (editMode === "restore" || !editItem || item.key !== editItem.key || item.description !== editItem.description))
         matches.push(item.description)
     }
     return matches.join("; ")
@@ -191,6 +196,50 @@ Panel {
     updater.running = true
   }
 
+  function restoreShortcut() {
+    if (!editItem || !editKey || saving) return
+    if (collisionFor(editKey) !== "") {
+      editMessage = "That shortcut is already in use. Press another key combination to restore this action."
+      return
+    }
+    saving = true
+    editMessage = ""
+    updater.command = [
+      "python3", updaterPath,
+      "--id", editItem.overrideId || "",
+      "--origin-key", editItem.originKey || editItem.key,
+      "--old-key", editItem.key,
+      "--new-key", editKey,
+      "--description", editItem.description,
+      "--action", editItem.action,
+      "--kind", editItem.restoreKind || "changed"
+    ]
+    updater.running = true
+  }
+
+  function deleteShortcut() {
+    if (!editItem || saving) return
+    if (!deleteConfirm) {
+      deleteConfirm = true
+      editMessage = "Select Delete shortcut again to confirm."
+      return
+    }
+    saving = true
+    editMessage = ""
+    updater.command = [
+      "python3", updaterPath,
+      "--id", editItem.overrideId || "",
+      "--origin-key", editItem.originKey || editItem.key,
+      "--old-key", editItem.key,
+      "--new-key", editItem.key,
+      "--description", editItem.description,
+      "--action", editItem.action,
+      "--kind", "deleted",
+      "--previous-kind", editItem.status
+    ]
+    updater.running = true
+  }
+
   function ingestUpdate(raw) {
     try {
       var result = JSON.parse(String(raw || ""))
@@ -201,6 +250,7 @@ Panel {
       editOpen = false
       editItem = null
       conflictAccepted = false
+      deleteConfirm = false
       refresh()
       Qt.callLater(function() { keyCatcher.forceActiveFocus() })
     } catch (error) {
@@ -789,7 +839,7 @@ Panel {
                 id: rowMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                cursorShape: modelData.editable && !modelData.disabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                cursorShape: modelData.editable ? Qt.PointingHandCursor : Qt.ArrowCursor
                 onClicked: root.startEdit(modelData)
               }
             }
@@ -840,7 +890,7 @@ Panel {
           spacing: Style.space(12)
 
           Text {
-            text: "Change shortcut"
+            text: root.editMode === "restore" ? "Restore shortcut" : "Change shortcut"
             color: root.foreground
             font.family: root.fontFamily
             font.pixelSize: Style.font.title
@@ -883,7 +933,7 @@ Panel {
                 }
                 Text {
                   anchors.horizontalCenter: parent.horizontalCenter
-                  text: "Press the replacement keys now"
+                  text: root.editMode === "restore" ? "Restore with this combination or press another" : "Press the replacement keys now"
                   color: root.muted
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
@@ -933,6 +983,7 @@ Panel {
                   Text {
                     width: parent.width
                     text: root.editKey + " is already used by: " + root.collisionFor(root.editKey)
+                      + (root.editMode === "restore" ? ". Press another key combination to continue." : "")
                     color: root.foreground
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
@@ -944,6 +995,7 @@ Panel {
               Rectangle {
                 width: parent.width
                 height: Style.space(34)
+                visible: root.editMode !== "restore"
                 radius: Style.space(6)
                 color: conflictMouse.containsMouse ? root.alpha(root.foreground, 0.10) : root.alpha(root.foreground, 0.055)
 
@@ -1005,10 +1057,44 @@ Panel {
           }
 
           Row {
-            anchors.right: parent.right
+            width: parent.width
             spacing: Style.space(9)
 
             Rectangle {
+              id: deleteButton
+              visible: root.editMode !== "restore"
+              width: deleteLabel.implicitWidth + Style.space(24)
+              height: Style.space(34)
+              radius: Style.cornerRadius
+              color: root.alpha("#ff6b6b", deleteMouse.containsMouse ? 0.32 : 0.20)
+              border.width: 1
+              border.color: root.alpha("#ff6b6b", 0.68)
+              Text {
+                id: deleteLabel
+                anchors.centerIn: parent
+                text: root.deleteConfirm ? "Confirm delete" : "Delete shortcut"
+                color: "#ff9a9a"
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+                font.bold: true
+              }
+              MouseArea {
+                id: deleteMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                enabled: !root.saving
+                onClicked: root.deleteShortcut()
+              }
+            }
+
+            Item {
+              width: Math.max(0, parent.width - deleteButton.width - cancelButton.width - applyButton.width
+                - Style.space(root.editMode === "restore" ? 18 : 27))
+              height: 1
+            }
+
+            Rectangle {
+              id: cancelButton
               width: cancelLabel.implicitWidth + Style.space(24)
               height: Style.space(34)
               radius: Style.cornerRadius
@@ -1029,7 +1115,7 @@ Panel {
               width: applyLabel.implicitWidth + Style.space(24)
               height: Style.space(34)
               radius: Style.cornerRadius
-              readonly property bool conflictBlocked: root.collisionFor(root.editKey) !== "" && !root.conflictAccepted
+              readonly property bool conflictBlocked: root.collisionFor(root.editKey) !== "" && (root.editMode === "restore" || !root.conflictAccepted)
               opacity: root.editKey && !root.saving && !conflictBlocked ? 1 : 0.5
               color: root.alpha(conflictBlocked ? root.foreground : root.statusColor("custom"), applyMouse.containsMouse ? 0.34 : 0.24)
               border.width: 1
@@ -1037,7 +1123,10 @@ Panel {
               Text {
                 id: applyLabel
                 anchors.centerIn: parent
-                text: root.saving ? "Applying…" : (applyButton.conflictBlocked ? "Resolve conflict" : (root.collisionFor(root.editKey) !== "" ? "Replace shortcut" : "Apply shortcut"))
+                text: root.saving ? "Applying…"
+                  : (root.editMode === "restore"
+                    ? (applyButton.conflictBlocked ? "Choose another shortcut" : "Restore shortcut")
+                    : (applyButton.conflictBlocked ? "Resolve conflict" : (root.collisionFor(root.editKey) !== "" ? "Replace shortcut" : "Apply shortcut")))
                 color: root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.body
@@ -1048,7 +1137,7 @@ Panel {
                 anchors.fill: parent
                 hoverEnabled: true
                 enabled: root.editKey !== "" && !root.saving && !applyButton.conflictBlocked
-                onClicked: root.applyEdit()
+                onClicked: root.editMode === "restore" ? root.restoreShortcut() : root.applyEdit()
               }
             }
           }

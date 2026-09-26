@@ -24,9 +24,10 @@ work only while its panel is used.
 2. The scanner reads Omarchy defaults, `bindings.lua`, runtime bindings, and
    OmaKeybinds state, then returns classified JSON over standard output.
 3. The QML panel searches and filters this in memory.
-4. An accepted edit starts the updater with explicit arguments. The updater
-   creates a backup, atomically replaces its marked block, reloads Hyprland,
-   validates, and either saves state or rolls back.
+4. An accepted edit, confirmed deletion, or restoration starts the updater
+   with explicit arguments. The updater creates a backup, atomically replaces
+   its marked block, reloads Hyprland, validates, and either saves state or
+   rolls back.
 
 The UI never evaluates shortcut commands. Preserved Lua actions are written
 back only for an existing parsed binding.
