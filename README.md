@@ -4,6 +4,8 @@
   <p>A taskbar shortcut browser and safe keybinding editor for Omarchy.</p>
 </div>
 
+![OmaKeybinds shortcut browser showing category filters and changed shortcuts](preview.png)
+
 OmaKeybinds is a native Omarchy Shell plugin that puts the keyboard shortcuts
 you actually use in one searchable interface. It compares the current Hyprland
 configuration with the defaults shipped by your installed Omarchy version, so
@@ -22,11 +24,14 @@ you can see what is standard, what changed, and what you added yourself.
 - Timestamped backups, Hyprland validation, and automatic rollback for edits.
 - No telemetry, accounts, network calls, or background service.
 
-## Requirements
+## Runtime dependencies
 
 - A current Omarchy installation with Omarchy Shell plugin support.
 - Hyprland and the `hyprctl` command.
 - Python 3.10 or newer.
+
+OmaKeybinds uses only Python's standard library. It does not download code or
+require any additional Python, system, or AUR packages.
 
 ## Install
 
