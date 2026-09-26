@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.oddlycrusty.omakeybinds",
+  "name": "OmaKeybinds",
+  "version": "1.0.0",
+  "author": "OddlyCrusty",
+  "license": "MIT",
+  "description": "Browse, compare, and safely edit Omarchy keyboard shortcuts.",
+  "homepage": "https://github.com/OddlyCrusty/omakeybinds",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "OmaKeybinds",
+    "description": "Browse default, changed, and custom keyboard shortcuts",
+    "category": "Compositor",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">OmaKeybinds</title>
+  <desc id="desc">The letter O on a rounded keyboard key with a remapping diamond</desc>
+  <defs>
+    <linearGradient id="face" x1="20" y1="16" x2="105" y2="111" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#25293a"/>
+      <stop offset="1" stop-color="#171925"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="86" y1="13" x2="116" y2="43" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#79e39a"/>
+      <stop offset="1" stop-color="#45bdf1"/>
+    </linearGradient>
+  </defs>
+  <rect x="14" y="24" width="100" height="92" rx="25" fill="#0d0f18" opacity=".7"/>
+  <rect x="14" y="13" width="100" height="92" rx="25" fill="url(#face)" stroke="#aebaf2" stroke-width="7"/>
+  <circle cx="63" cy="59" r="25" fill="none" stroke="#eef1ff" stroke-width="11"/>
+  <rect x="88" y="10" width="26" height="26" rx="5" transform="rotate(45 101 23)" fill="url(#accent)" stroke="#eef1ff" stroke-width="4"/>
+</svg>
