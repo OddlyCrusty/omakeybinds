@@ -79,6 +79,14 @@ class UpdaterTests(unittest.TestCase):
         self.assertIn("\nnew\n", replaced)
         self.assertNotIn("\nold\n", replaced)
 
+    def test_replacement_removes_managed_collision(self):
+        existing = [
+            {"id": "first", "current_key": "SUPER + F"},
+            {"id": "second", "current_key": "SUPER + G"},
+        ]
+        entry = {"id": "first", "current_key": "SUPER + G"}
+        self.assertEqual(updater.upsert_override(existing, entry), [entry])
+
 
 class ResetterTests(unittest.TestCase):
     def test_success_clears_managed_state_after_refresh_and_validation(self):
