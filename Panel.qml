@@ -783,6 +783,7 @@ Panel {
                       id: keyText
                       anchors.centerIn: parent
                       text: modelData.key
+                      textFormat: Text.PlainText
                       color: root.foreground
                       font.family: "monospace"
                       font.pixelSize: Style.font.caption
@@ -794,6 +795,7 @@ Panel {
                     width: Math.max(1, parent.width - x - statusPill.width - parent.spacing)
                     height: Style.space(28)
                     text: modelData.description
+                    textFormat: Text.PlainText
                     color: modelData.disabled ? root.muted : root.foreground
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.body
@@ -828,6 +830,7 @@ Panel {
                   text: modelData.previous !== ""
                     ? "Previously: " + modelData.previous
                     : modelData.command
+                  textFormat: Text.PlainText
                   color: root.muted
                   font.family: modelData.previous !== "" ? root.fontFamily : "monospace"
                   font.pixelSize: Style.font.caption
@@ -848,6 +851,7 @@ Panel {
               anchors.centerIn: parent
               visible: !root.loading && root.filteredShortcuts.length === 0
               text: root.errorMessage || "No shortcuts match this view."
+              textFormat: Text.PlainText
               color: root.muted
               font.family: root.fontFamily
               font.pixelSize: Style.font.body
@@ -900,6 +904,7 @@ Panel {
           Text {
             width: parent.width
             text: root.editItem ? root.editItem.description : ""
+            textFormat: Text.PlainText
             color: root.muted
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
@@ -926,6 +931,7 @@ Panel {
                 Text {
                   anchors.horizontalCenter: parent.horizontalCenter
                   text: root.editKey || "Press a key combination"
+                  textFormat: Text.PlainText
                   color: root.foreground
                   font.family: "monospace"
                   font.pixelSize: Style.font.title
@@ -984,6 +990,7 @@ Panel {
                     width: parent.width
                     text: root.editKey + " is already used by: " + root.collisionFor(root.editKey)
                       + (root.editMode === "restore" ? ". Press another key combination to continue." : "")
+                    textFormat: Text.PlainText
                     color: root.foreground
                     font.family: root.fontFamily
                     font.pixelSize: Style.font.caption
@@ -1050,6 +1057,7 @@ Panel {
             width: parent.width
             visible: root.editMessage !== ""
             text: root.editMessage
+            textFormat: Text.PlainText
             color: "#ff6b6b"
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
@@ -1320,6 +1328,7 @@ Panel {
             width: parent.width
             visible: root.resetMessage !== ""
             text: root.resetMessage
+            textFormat: Text.PlainText
             color: root.resetMessage.indexOf("reset to") !== -1 ? "#7bd88f" : "#ff6b6b"
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
