@@ -3,6 +3,13 @@
 All notable changes are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] - 2026-09-27
+
+### Fixed
+
+- Send shortcut data to the update helper through standard input so editing,
+  restoring, and deleting bindings do not expose private commands in process arguments.
+
 ## [1.1.0] - 2026-09-26
 
 ### Added

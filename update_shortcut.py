@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -96,17 +97,30 @@ def hyprctl(*arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["hyprctl", *arguments], capture_output=True, text=True, timeout=8, check=False)
 
 
+def read_request() -> argparse.Namespace:
+    """Read private shortcut data from stdin, never from process arguments."""
+    data = json.load(sys.stdin)
+    required = {"origin_key", "old_key", "new_key", "description", "action", "kind"}
+    optional = {"id", "previous_kind"}
+    if (not isinstance(data, dict) or not required.issubset(data)
+            or data.keys() - required - optional
+            or any(not isinstance(value, str) for value in data.values())):
+        raise ValueError("Invalid shortcut request")
+    data.setdefault("id", "")
+    data.setdefault("previous_kind", "")
+    if (data["kind"] not in ("default", "changed", "custom", "deleted")
+            or data["previous_kind"] not in ("", "default", "changed", "custom")):
+        raise ValueError("Invalid shortcut kind")
+    return argparse.Namespace(**data)
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--id", default="")
-    parser.add_argument("--origin-key", required=True)
-    parser.add_argument("--old-key", required=True)
-    parser.add_argument("--new-key", required=True)
-    parser.add_argument("--description", required=True)
-    parser.add_argument("--action", required=True)
-    parser.add_argument("--kind", choices=("default", "changed", "custom", "deleted"), required=True)
-    parser.add_argument("--previous-kind", choices=("default", "changed", "custom"), default="")
-    args = parser.parse_args()
+    try:
+        args = read_request()
+    except (ValueError, OSError):
+        # Do not echo malformed input: it may contain private commands.
+        print(json.dumps({"ok": False, "message": "Could not read the shortcut request."}))
+        return 2
 
     original = normalize_key(args.origin_key)
     old = normalize_key(args.old_key)

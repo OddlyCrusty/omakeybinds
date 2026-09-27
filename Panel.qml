@@ -183,17 +183,7 @@ Panel {
     }
     saving = true
     editMessage = ""
-    updater.command = [
-      "python3", updaterPath,
-      "--id", editItem.overrideId || "",
-      "--origin-key", editItem.originKey || editItem.key,
-      "--old-key", editItem.key,
-      "--new-key", editKey,
-      "--description", editItem.description,
-      "--action", editItem.action,
-      "--kind", editItem.status === "custom" ? "custom" : "changed"
-    ]
-    updater.running = true
+    startUpdate(editKey, editItem.status === "custom" ? "custom" : "changed", "")
   }
 
   function restoreShortcut() {
@@ -204,17 +194,7 @@ Panel {
     }
     saving = true
     editMessage = ""
-    updater.command = [
-      "python3", updaterPath,
-      "--id", editItem.overrideId || "",
-      "--origin-key", editItem.originKey || editItem.key,
-      "--old-key", editItem.key,
-      "--new-key", editKey,
-      "--description", editItem.description,
-      "--action", editItem.action,
-      "--kind", editItem.restoreKind || "changed"
-    ]
-    updater.running = true
+    startUpdate(editKey, editItem.restoreKind || "changed", "")
   }
 
   function deleteShortcut() {
@@ -226,17 +206,21 @@ Panel {
     }
     saving = true
     editMessage = ""
-    updater.command = [
-      "python3", updaterPath,
-      "--id", editItem.overrideId || "",
-      "--origin-key", editItem.originKey || editItem.key,
-      "--old-key", editItem.key,
-      "--new-key", editItem.key,
-      "--description", editItem.description,
-      "--action", editItem.action,
-      "--kind", "deleted",
-      "--previous-kind", editItem.status
-    ]
+    startUpdate(editItem.key, "deleted", editItem.status)
+  }
+
+  function startUpdate(newKey, kind, previousKind) {
+    updater.payload = JSON.stringify({
+      id: editItem.overrideId || "",
+      origin_key: editItem.originKey || editItem.key,
+      old_key: editItem.key,
+      new_key: newKey,
+      description: editItem.description,
+      action: editItem.action,
+      kind: kind,
+      previous_kind: previousKind
+    })
+    updater.stdinEnabled = true
     updater.running = true
   }
 
@@ -393,7 +377,14 @@ Panel {
 
   Process {
     id: updater
+    property string payload: ""
+    command: ["python3", root.updaterPath]
     running: false
+    onStarted: {
+      write(payload)
+      stdinEnabled = false
+      payload = ""
+    }
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.ingestUpdate(text)

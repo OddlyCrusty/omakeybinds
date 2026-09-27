@@ -25,7 +25,8 @@ work only while its panel is used.
    OmaKeybinds state, then returns classified JSON over standard output.
 3. The QML panel searches and filters this in memory.
 4. An accepted edit, confirmed deletion, or restoration starts the updater
-   with explicit arguments. The updater creates a backup, atomically replaces
+   with a JSON request on standard input, keeping private commands out of
+   process arguments. The updater creates a backup, atomically replaces
    its marked block, reloads Hyprland, validates, and either saves state or
    rolls back.
 

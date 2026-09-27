@@ -1,4 +1,7 @@
 import importlib.util
+import io
+import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -59,6 +62,73 @@ class ScannerTests(unittest.TestCase):
 
 
 class UpdaterTests(unittest.TestCase):
+    def request(self, **changes):
+        data = dict(origin_key="SUPER + F", old_key="SUPER + F", new_key="SUPER + G",
+                    description="Private shortcut", action='"app --token test-secret-ä"', kind="custom")
+        data.update(changes)
+        return data
+
+    def test_stdin_request_preserves_private_action(self):
+        request = self.request(action='"app --token test-secret \\\"quoted\\\""\n-- Unicode: ä')
+        with mock.patch.object(sys, "stdin", io.StringIO(json.dumps(request))):
+            self.assertEqual(updater.read_request().action, request["action"])
+
+    def test_invalid_requests_fail_without_writes_or_private_output(self):
+        requests = ["", "test-secret", "[]", "null", json.dumps({"action": "test-secret"})]
+        requests += [json.dumps(self.request(**change)) for change in (
+            {"action": None}, {"kind": "test-secret"}, {"previous_kind": "test-secret"},
+            {"extra": "test-secret"}, {"new_key": 123})]
+        for request in requests:
+            with self.subTest(request=request), \
+                 mock.patch.object(sys, "stdin", io.StringIO(request)), \
+                 mock.patch.object(sys, "stdout", new_callable=io.StringIO) as output, \
+                 mock.patch.object(updater, "load_state") as load_state:
+                self.assertEqual(updater.main(), 2)
+                self.assertFalse(json.loads(output.getvalue())["ok"])
+                self.assertNotIn("test-secret", output.getvalue())
+                load_state.assert_not_called()
+
+    def test_edit_delete_restore_from_stdin(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bindings = Path(directory) / "bindings.lua"
+            state = Path(directory) / "overrides.json"
+            bindings.write_text("-- Personal bindings\n")
+            for kind in ("custom", "deleted", "custom"):
+                request = self.request(id="private", kind=kind, previous_kind="custom")
+                with self.subTest(kind=kind), \
+                     mock.patch.object(updater, "BINDINGS", bindings), \
+                     mock.patch.object(updater, "STATE", state), \
+                     mock.patch.object(sys, "stdin", io.StringIO(json.dumps(request))), \
+                     mock.patch.object(sys, "stdout", new_callable=io.StringIO) as output, \
+                     mock.patch.object(updater, "hyprctl", return_value=CompletedProcess([], 0, "", "")):
+                    self.assertEqual(updater.main(), 0)
+                    self.assertTrue(json.loads(output.getvalue())["ok"])
+                    saved = json.loads(state.read_text())["overrides"][0]
+                    self.assertEqual(saved["action"], request["action"])
+                    self.assertEqual(saved["kind"], kind)
+                    self.assertEqual("o.bind(" in bindings.read_text(), kind != "deleted")
+                    self.assertNotIn("test-secret", output.getvalue())
+
+    def test_private_action_is_absent_from_process_arguments(self):
+        command = [sys.executable, str(PLUGIN / "update_shortcut.py")]
+        with subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, text=True) as process:
+            try:
+                # Keep stdin open so the helper remains alive while inspecting argv.
+                process.stdin.write(json.dumps(self.request(new_key="")))
+                process.stdin.flush()
+                arguments = Path(f"/proc/{process.pid}/cmdline").read_bytes()
+                self.assertNotIn(b"test-secret", arguments)
+                self.assertNotIn(b"--action", arguments)
+                output, errors = process.communicate(timeout=5)
+                self.assertEqual(process.returncode, 2)
+                self.assertFalse(json.loads(output)["ok"])
+                self.assertEqual(errors, "")
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
+
     def test_managed_block_unbinds_original_and_collision(self):
         block = updater.managed_block([
             {
