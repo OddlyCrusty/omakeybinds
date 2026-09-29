@@ -3,6 +3,56 @@
 All notable changes are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-09-28
+
+### Added
+
+- A typed-combination alternative in both editors, with conflict checks that
+  do not require pressing an existing global shortcut.
+- Two-step Add shortcut dialog for installed apps, websites, folders, and custom
+  commands, with app search/icons, a folder picker, and automatic descriptions.
+- Review the exact command, capture keys, and explicitly confirm conflicts
+  before saving. No actions are launched during preview or saving.
+- Recheck launcher identity and live bindings before creation; reuse the shared
+  lock, private backups, validation, and rollback transaction.
+- Mark new shortcuts as Added by you and retain that identity through editing,
+  deletion, and restoration.
+
+### Fixed
+
+- Keep deleted source-defined actions visible when their old key is reused;
+  restoring elsewhere preserves the new owner. Occupied restoration targets
+  require choosing another key, and unnamed actions still trigger warnings.
+- Request Wayland shortcut inhibition during add/edit dialogs so the compositor
+  does not consume occupied combinations before conflict checks. Refuse key
+  recording until protection is active, and release it on close.
+- Encode Lua strings safely and replace managed blocks without interpreting
+  command backslashes. Descriptions are never inserted into Lua comments.
+- Preserve toggle calls, binding options, Unicode, and raw physical/mouse keys.
+- Apply all managed unbinds before rebindings so moving one shortcut does not
+  remove another shortcut that reused its original key.
+- Fail closed on malformed or mismatched managed state and stale editor views.
+- Serialize edits, reset, and cleanup; use unique private backups and preserve
+  symlinked configuration files and unrelated line endings.
+- Give reset the same validation and rollback behavior as edits and respect
+  `XDG_CONFIG_HOME` consistently.
+
+### Changed
+
+- Use native Omarchy controls and theme colors in a content-sized Add dialog.
+  App selection (click or Enter) advances directly to focused key capture.
+  Rename shortcuts on the review page and expand command details when needed.
+- Simplify dialog chrome with quieter action tabs, app icon fallbacks, larger
+  supporting text, individual shortcut keycaps, and one prominent save action.
+- Scan compositor metadata directly without executing the user's Lua config.
+- Only edit unambiguous, supported binding expressions. Local functions,
+  dynamic expressions, submaps, and unavailable runtime data remain read-only.
+- Send opaque selection tokens over stdin and recheck the selection and
+  conflicts in the helper before writing.
+- Recover old state only when its original binding can be reconstructed safely;
+  otherwise require backup recovery or explicit managed-only cleanup.
+- Retain displaced managed bindings in the Deleted view for restoration.
+
 ## [1.1.1] - 2026-09-27
 
 ### Fixed

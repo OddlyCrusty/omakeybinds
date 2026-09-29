@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 
@@ -18,11 +19,13 @@ Panel {
   readonly property color muted: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.62)
   readonly property color surface: Color.popups.background
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
-  readonly property string scannerPath: Qt.resolvedUrl("scan_shortcuts.py").toString().replace(/^file:\/\//, "")
-  readonly property string updaterPath: Qt.resolvedUrl("update_shortcut.py").toString().replace(/^file:\/\//, "")
-  readonly property string resetterPath: Qt.resolvedUrl("reset_shortcuts.py").toString().replace(/^file:\/\//, "")
+  readonly property string scannerPath: decodeURIComponent(Qt.resolvedUrl("scan_shortcuts.py").toString().replace(/^file:\/\//, ""))
+  readonly property string updaterPath: decodeURIComponent(Qt.resolvedUrl("update_shortcut.py").toString().replace(/^file:\/\//, ""))
+  readonly property string resetterPath: decodeURIComponent(Qt.resolvedUrl("reset_shortcuts.py").toString().replace(/^file:\/\//, ""))
 
   property var shortcuts: []
+  property string scanSnapshot: ""
+  property string editSnapshot: ""
   property var filteredShortcuts: []
   property var counts: ({ all: 0, default: 0, changed: 0, custom: 0, deleted: 0 })
   property string activeFilter: "all"
@@ -30,6 +33,9 @@ Panel {
   property bool loading: false
   property string errorMessage: ""
   property bool editOpen: false
+  property bool addOpen: false
+  readonly property bool captureRequested: editOpen || (addOpen && addDialog.step === 1)
+  readonly property bool captureProtected: shortcutInhibitor.active
   property string editMode: "edit"
   property var editItem: null
   property string editKey: ""
@@ -79,7 +85,7 @@ Panel {
     for (var i = 0; i < shortcuts.length; i++) {
       var item = shortcuts[i]
       if (activeFilter !== "all" && item.status !== activeFilter) continue
-      var haystack = [item.key, item.description, item.command, item.previous, item.source].join(" ").toLowerCase()
+      var haystack = [item.key, item.displayKey, item.description, item.command, item.previous, item.source].join(" ").toLowerCase()
       if (needle && haystack.indexOf(needle) === -1) continue
       output.push(item)
     }
@@ -89,20 +95,32 @@ Panel {
   function refresh() {
     loading = true
     errorMessage = ""
-    scanner.running = false
+    if (scanner.running) {
+      scanner.rescanPending = true
+      return
+    }
     scanner.running = true
   }
 
   function startEdit(item) {
-    if (!item || !item.editable) return
+    if (!item || !item.editable || saving || resetting || loading) return
     editItem = item
+    editSnapshot = scanSnapshot
     editMode = item.disabled ? "restore" : "edit"
     editKey = item.key
     editMessage = ""
+    typedShortcut.editing = false
     conflictAccepted = false
     deleteConfirm = false
     editOpen = true
     Qt.callLater(function() { keyCapture.forceActiveFocus() })
+  }
+
+  function startAdd() {
+    if (loading || saving || resetting || addDialog.busy || !scanSnapshot || errorMessage) return
+    filterMenuOpen = false
+    addOpen = true
+    addDialog.open(scanSnapshot)
   }
 
   function cancelEdit() {
@@ -144,8 +162,14 @@ Panel {
   }
 
   function captureKey(event) {
+    if (saving) { event.accepted = true; return }
     if (event.key === Qt.Key_Escape) {
       cancelEdit()
+      event.accepted = true
+      return
+    }
+    if (!captureProtected) {
+      editMessage = "Protected key capture is unavailable. Do not press a global shortcut; close and reopen the editor."
       event.accepted = true
       return
     }
@@ -169,8 +193,8 @@ Panel {
     var matches = []
     for (var i = 0; i < shortcuts.length; i++) {
       var item = shortcuts[i]
-      if (!item.disabled && item.key === key && (editMode === "restore" || !editItem || item.key !== editItem.key || item.description !== editItem.description))
-        matches.push(item.description)
+      if (!item.disabled && (item.key === key || item.displayKey === key) && (editMode === "restore" || !editItem || item.token !== editItem.token))
+        matches.push(item.description || "Unnamed shortcut")
     }
     return matches.join("; ")
   }
@@ -183,7 +207,7 @@ Panel {
     }
     saving = true
     editMessage = ""
-    startUpdate(editKey, editItem.status === "custom" ? "custom" : "changed", "")
+    startUpdate(editKey, "edit")
   }
 
   function restoreShortcut() {
@@ -194,7 +218,7 @@ Panel {
     }
     saving = true
     editMessage = ""
-    startUpdate(editKey, editItem.restoreKind || "changed", "")
+    startUpdate(editKey, "restore")
   }
 
   function deleteShortcut() {
@@ -206,19 +230,16 @@ Panel {
     }
     saving = true
     editMessage = ""
-    startUpdate(editItem.key, "deleted", editItem.status)
+    startUpdate(editItem.key, "delete")
   }
 
-  function startUpdate(newKey, kind, previousKind) {
+  function startUpdate(newKey, operation) {
     updater.payload = JSON.stringify({
-      id: editItem.overrideId || "",
-      origin_key: editItem.originKey || editItem.key,
-      old_key: editItem.key,
+      token: editItem.token,
+      snapshot: editSnapshot,
       new_key: newKey,
-      description: editItem.description,
-      action: editItem.action,
-      kind: kind,
-      previous_kind: previousKind
+      operation: operation,
+      replace: conflictAccepted
     })
     updater.stdinEnabled = true
     updater.running = true
@@ -287,11 +308,14 @@ Panel {
     try {
       var result = JSON.parse(String(raw || ""))
       shortcuts = result.items || []
+      scanSnapshot = result.snapshot || ""
       counts = result.counts || ({ all: shortcuts.length, default: 0, changed: 0, custom: 0, deleted: 0 })
       errorMessage = result.error || ""
       applyFilters()
     } catch (error) {
       shortcuts = []
+      scanSnapshot = ""
+      counts = ({ all: 0, default: 0, changed: 0, custom: 0, deleted: 0 })
       filteredShortcuts = []
       errorMessage = "Could not read shortcut data: " + error
     }
@@ -313,12 +337,14 @@ Panel {
   }
 
   function close() {
+    if (saving || resetting || addDialog.busy) return
     if (root.bar && typeof root.bar.setCenterHoverRevealSuppressed === "function")
       root.bar.setCenterHoverRevealSuppressed(false)
     searchField.focus = false
     filterMenuOpen = false
     editOpen = false
     editItem = null
+    addOpen = false
     settingsOpen = false
     resetConfirmOpen = false
     root.controller.hide()
@@ -340,6 +366,7 @@ Panel {
 
   Process {
     id: scanner
+    property bool rescanPending: false
     command: ["python3", root.scannerPath]
     running: false
     stdout: StdioCollector {
@@ -353,7 +380,13 @@ Panel {
       }
     }
     onRunningChanged: {
-      if (!running && root.loading) root.loading = false
+      if (!running) {
+        root.loading = false
+        if (rescanPending) {
+          rescanPending = false
+          Qt.callLater(root.refresh)
+        }
+      }
     }
   }
 
@@ -410,6 +443,17 @@ Panel {
     function refresh(): void { root.refresh() }
   }
 
+  ShortcutInhibitor {
+    id: shortcutInhibitor
+    window: panel
+    // Focus alone does not suppress compositor binds. Scope inhibition to the
+    // editor surface and its visible dialogs; never alter global bindings.
+    enabled: root.opened && root.captureRequested
+    onActiveChanged: {
+      if (active && root.editOpen) Qt.callLater(function() { if (root.editOpen) keyCapture.forceActiveFocus() })
+    }
+  }
+
   KeyboardPanel {
     id: panel
     anchorItem: root.anchorItem
@@ -418,13 +462,17 @@ Panel {
     open: root.opened
     centerOnBar: false
     focusTarget: keyCatcher
+    // Retain focus for recording, but preserve the shell's normal focus prime
+    // while browsing. The app/folder picker is not a recording surface.
+    WlrLayershell.keyboardFocus: !panel.open ? WlrKeyboardFocus.None
+      : root.captureRequested || !panel.focusPrimed ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand
     contentWidth: panel.fittedContentWidth(Style.space(760), Style.space(900))
     contentHeight: panel.fittedContentHeight(Style.space(670), Style.space(800))
 
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: searchField.activeFocus || root.editOpen || root.settingsOpen
+      blocked: searchField.activeFocus || root.editOpen || root.settingsOpen || root.addOpen
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(text) {
@@ -454,7 +502,7 @@ Panel {
           }
 
           Column {
-            width: parent.width - headerLogo.width - refreshButton.width - settingsButton.width - parent.spacing * 3
+            width: parent.width - headerLogo.width - addButton.width - refreshButton.width - settingsButton.width - parent.spacing * 4
             spacing: Style.space(3)
             Text {
               text: "OmaKeybinds"
@@ -464,11 +512,24 @@ Panel {
               font.bold: true
             }
             Text {
-              text: root.loading ? "Scanning Hyprland bindings…" : root.counts.all + " active shortcuts · compared with Omarchy defaults"
+              text: root.loading ? "Scanning Hyprland bindings…" : root.counts.all + " shortcuts · compared with Omarchy defaults"
               color: root.muted
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
             }
+          }
+
+          Button {
+            id: addButton
+            text: "+ Add"
+            height: Style.space(34)
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            bordered: true
+            focusable: true
+            enabled: !root.loading && !root.saving && !root.resetting && root.scanSnapshot !== "" && !root.errorMessage
+            Accessible.name: "Add a new shortcut"
+            onClicked: root.startAdd()
           }
 
           Rectangle {
@@ -726,6 +787,17 @@ Panel {
           }
         }
 
+        Text {
+          width: parent.width
+          visible: root.errorMessage !== ""
+          text: root.errorMessage
+          textFormat: Text.PlainText
+          color: "#ff9a9a"
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.WordWrap
+        }
+
         Rectangle {
           width: parent.width
           height: 1
@@ -773,7 +845,7 @@ Panel {
                     Text {
                       id: keyText
                       anchors.centerIn: parent
-                      text: modelData.key
+                      text: modelData.displayKey || modelData.key
                       textFormat: Text.PlainText
                       color: root.foreground
                       font.family: "monospace"
@@ -806,7 +878,7 @@ Panel {
                     Text {
                       id: statusText
                       anchors.centerIn: parent
-                      text: modelData.disabled ? "DELETED" : (modelData.status === "default" ? "DEFAULT" : "✦  " + String(modelData.status).toUpperCase())
+                      text: modelData.disabled ? "DELETED" : modelData.created ? "ADDED BY YOU" : (modelData.status === "default" ? "DEFAULT" : "✦  " + String(modelData.status).toUpperCase())
                       color: root.statusColor(modelData.status)
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.caption * 0.88
@@ -826,6 +898,16 @@ Panel {
                   font.family: modelData.previous !== "" ? root.fontFamily : "monospace"
                   font.pixelSize: Style.font.caption
                   elide: Text.ElideRight
+                }
+                Text {
+                  width: parent.width
+                  visible: !modelData.editable && !!modelData.reason
+                  text: modelData.reason || ""
+                  textFormat: Text.PlainText
+                  color: root.muted
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WordWrap
                 }
               }
 
@@ -921,7 +1003,7 @@ Panel {
                 spacing: Style.space(5)
                 Text {
                   anchors.horizontalCenter: parent.horizontalCenter
-                  text: root.editKey || "Press a key combination"
+                  text: !root.captureProtected ? "Waiting for protected capture…" : root.editKey || "Press a key combination"
                   textFormat: Text.PlainText
                   color: root.foreground
                   font.family: "monospace"
@@ -930,7 +1012,9 @@ Panel {
                 }
                 Text {
                   anchors.horizontalCenter: parent.horizontalCenter
-                  text: root.editMode === "restore" ? "Restore with this combination or press another" : "Press the replacement keys now"
+                  text: !root.captureProtected ? "Do not press shortcut keys until capture is ready"
+                    : !keyCapture.activeFocus ? "Click here to record a key combination"
+                    : root.editMode === "restore" ? "Restore with this combination or press another" : "Press the replacement keys now"
                   color: root.muted
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
@@ -938,6 +1022,32 @@ Panel {
               }
               MouseArea { anchors.fill: parent; onClicked: keyCapture.forceActiveFocus() }
             }
+          }
+
+          ShortcutEntry {
+            id: typedShortcut
+            width: parent.width
+            host: root
+            value: root.editKey
+            enabled: !root.saving
+            onSelected: function(combination) {
+              root.editKey = combination
+              root.conflictAccepted = false
+              root.editMessage = ""
+            }
+          }
+
+          Text {
+            width: parent.width
+            visible: root.editKey !== "" && root.collisionFor(root.editKey) === ""
+            text: root.editMode !== "restore" && root.editItem && root.editKey === root.editItem.key
+              ? "Current combination for this action."
+              : "Available — no active shortcut uses this combination."
+            textFormat: Text.PlainText
+            color: root.muted
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.WordWrap
           }
 
           Rectangle {
@@ -1087,7 +1197,7 @@ Panel {
             }
 
             Item {
-              width: Math.max(0, parent.width - deleteButton.width - cancelButton.width - applyButton.width
+              width: Math.max(0, parent.width - (deleteButton.visible ? deleteButton.width : 0) - cancelButton.width - applyButton.width
                 - Style.space(root.editMode === "restore" ? 18 : 27))
               height: 1
             }
@@ -1141,6 +1251,25 @@ Panel {
             }
           }
         }
+      }
+    }
+
+    AddShortcut {
+      id: addDialog
+      anchors.fill: parent
+      z: 55
+      visible: root.addOpen
+      host: root
+      onDismissed: {
+        root.addOpen = false
+        Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+      }
+      onSaved: {
+        root.addOpen = false
+        root.activeFilter = "custom"
+        root.query = ""
+        root.refresh()
+        Qt.callLater(function() { keyCatcher.forceActiveFocus() })
       }
     }
 
@@ -1288,7 +1417,7 @@ Panel {
           Text {
             width: parent.width
             visible: root.resetConfirmOpen
-            text: "This removes all custom, changed, and deleted shortcuts and restores the keybindings shipped with your current Omarchy version. Omarchy will create a timestamped backup first."
+            text: "This replaces your personal bindings file with the defaults shipped with your current Omarchy version. OmaKeybinds backs up the file and its state first, and restores the file if validation fails."
             color: root.muted
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
@@ -1306,7 +1435,7 @@ Panel {
             Text {
               anchors.fill: parent
               anchors.margins: Style.space(12)
-              text: "This action changes ~/.config/hypr/bindings.lua. Your current file remains recoverable from its backup."
+              text: "This changes hypr/bindings.lua in your configuration directory. Your current file remains recoverable from its backup."
               color: "#ff9a9a"
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption

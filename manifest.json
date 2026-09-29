@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "io.github.oddlycrusty.omakeybinds",
   "name": "OmaKeybinds",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "author": "OddlyCrusty",
   "license": "MIT",
-  "description": "Browse, compare, and safely edit Omarchy keyboard shortcuts.",
+  "description": "Browse, compare, add, and safely edit Omarchy keyboard shortcuts.",
   "homepage": "https://github.com/OddlyCrusty/omakeybinds",
   "kinds": [
     "bar-widget"
