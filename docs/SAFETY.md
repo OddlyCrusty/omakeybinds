@@ -13,6 +13,9 @@ focus policy afterward; the app/folder picker is not inhibited. Capture checks t
 acknowledgement and refuses recording if it is missing or revoked. The
 compositor retains control over emergency/inhibition-bypassing shortcuts.
 See the [Quickshell ShortcutInhibitor contract](https://quickshell.org/docs/v0.3.1/types/Quickshell.Wayland/ShortcutInhibitor/).
+The [known desktop capture limitation](../README.md#known-capture-limitation)
+is not conclusively resolved. Use **Type a combination instead** if capture
+is unavailable or a chord launches its existing action.
 
 Every GUI edit or addition:
 
@@ -51,6 +54,7 @@ The configured `XDG_CONFIG_HOME` is used consistently for bindings and state.
 From the installed plugin directory, run:
 
 ```bash
+cd ~/.config/omarchy/plugins/io.github.oddlycrusty.omakeybinds
 python3 remove_overrides.py
 ```
 
@@ -62,16 +66,83 @@ Ambiguous or incomplete block markers require manual recovery.
 
 ## Manual recovery
 
-List available backups:
+Close the plugin and stop other configuration editors before recovery. Keep
+separate copies of the current bindings and state first, even if they appear
+broken. Recovery replaces the selected files and can undo later edits.
+
+### Find both backups
+
+Bindings and state backups live beside their **resolved file targets**. With
+ordinary files these are under `~/.config/hypr` and `~/.config/omarchy`; with
+symlinks they may be inside your dotfiles repository. These read-only commands
+respect `XDG_CONFIG_HOME` and locate both sets:
 
 ```bash
-ls -1t ~/.config/hypr/bindings.lua.bak.omakeybinds-*
+omak_config_root="${XDG_CONFIG_HOME:-$HOME/.config}"
+omak_bindings_target=$(readlink -f -- "$omak_config_root/hypr/bindings.lua")
+omak_state_target=$(readlink -f -- "$omak_config_root/omarchy/omakeybinds-overrides.json")
+ls -lt -- "${omak_bindings_target}.bak.omakeybinds-"*
+ls -lt -- "${omak_state_target}.bak.omakeybinds-"*
 ```
 
-To restore one, copy the selected file over your bindings file and restore its
-matching state backup, then run `hyprctl reload`. Respect `XDG_CONFIG_HOME` if
-set. Inspect the backups before restoring them; the newest is not always the
-one you want. Failed operations may also leave useful backups.
+Stop if a target cannot be resolved; investigate the missing file or broken
+symlink first. `ls` reports no match when no backups exist for a target.
+Backup suffixes are independently generated random values, **not matching pair
+IDs**. Modification times help find candidates, but do not prove a match.
+Successful helper responses identify their pair as `backup` and `stateBackup`;
+the GUI does not provide a backup-history browser.
+
+### Check that the state belongs to the bindings
+
+For version-2 state, the stored `block_digest` must match the exact managed
+block in the candidate bindings. From the installed plugin directory, replace
+both placeholder paths below with the chosen backups. This check reads files
+only; it does not restore them, execute Lua, or reload Hyprland:
+
+```bash
+python3 - /absolute/path/to/bindings-backup /absolute/path/to/state-backup <<'PY'
+import sys
+from pathlib import Path
+from shortcut_store import check_block_state, load_state, read_text
+
+bindings_path, state_path = map(Path, sys.argv[1:3])
+if not bindings_path.is_file() or not state_path.is_file():
+    raise SystemExit('Select two existing backup files; nothing has been restored.')
+state = load_state(state_path)
+if state['version'] != 2:
+    raise SystemExit('Legacy state has no version-2 fingerprint; inspect the original backup pair manually.')
+check_block_state(read_text(bindings_path), state)
+print('Managed block and state are consistent. Review the rest of the bindings before restoring.')
+PY
+```
+
+Matching the managed block does not validate unrelated Lua or prove the two
+files came from the same operation. Review the remaining contents locally;
+backups can contain private commands. Legacy version-1 state needs manual
+comparison with its original bindings, not a guessed fingerprint.
+
+If state did not exist before an operation, there is no state backup. Restore
+that earlier state only after confirming its bindings contain no managed block;
+preserve the current state separately rather than leaving incompatible metadata
+beside those bindings. If a managed block exists but no matching state can be
+found, do not invent state or a hash: use matching external backups, seek help,
+or deliberately choose the documented managed-only cleanup.
+
+### Restore and validate
+
+Once a pair is confirmed, copy the selected backups over the two resolved
+targets, preserving any configuration symlinks. Use explicit selected filenames,
+not globs, and keep the backups. Then run:
+
+```bash
+hyprctl reload
+hyprctl configerrors
+```
+
+Do not resume editing until reload succeeds and the configuration-error output
+is empty. Reopen OmaKeybinds and rescan; a remaining state/block mismatch must
+be resolved rather than bypassed. Failed operations can leave useful backups,
+and the newest backup is not necessarily the one you want.
 
 The lock serializes OmaKeybinds operations. External editors do not take that
 lock; the helper checks for concurrent changes and does not overwrite a newer

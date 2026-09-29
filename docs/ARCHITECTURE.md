@@ -9,6 +9,9 @@ work only while its panel is used.
 - `Panel.qml` provides search, filtering, editing, conflict confirmation, and
   settings UI.
 - `AddShortcut.qml` provides a two-step action picker and shortcut review.
+- `ShortcutEntry.qml` provides the shared typed-combination alternative,
+  normalizes modifier order and key identifiers, and invalidates incomplete
+  input. It feeds the same conflict checks as recorded keys.
 - `OmaKeybindsLogo.qml` draws the theme-aware taskbar mark without external
   assets.
 - `scan_shortcuts.py` parses Omarchy defaults and user bindings, consults the
@@ -60,3 +63,21 @@ State version 2 records the full binding specification and managed-block hash.
 Version 1 is reconstructed from an unambiguous original source binding or
 refused. Backups retain the previous state. A missing, malformed, or mismatched
 state file is never treated as permission to discard the existing block.
+
+## Capture and restoration
+
+`Panel.qml` requests compositor shortcut inhibition while editing or capturing
+in the Add dialog. Key recording checks the active acknowledgment; typed input
+does not require chord recording. UI conflict checks use the scanned active
+rows, while mutation helpers recheck a fresh snapshot before saving. Deleted
+rows are not conflicts. Restoring onto an occupied key is always refused,
+even if a replacement-consent flag is supplied.
+
+Deleted actions remain represented when their previous keys are reused.
+For a deletion already present in the user's source, `preserve_origin` records
+that restoring it elsewhere must not unbind the unrelated owner of its original
+key. This flag survives later edits, deletion, and restoration. Managed blocks
+emit the applicable unbinds before any active bindings.
+
+See the README's [known capture limitation](../README.md#known-capture-limitation):
+successful isolated tests do not establish that every desktop capture path works.

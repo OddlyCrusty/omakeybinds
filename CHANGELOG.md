@@ -39,6 +39,9 @@ All notable changes are documented here. This project follows
 
 ### Changed
 
+- Clarify deleted-action semantics, typed-input troubleshooting, the remaining
+  desktop capture limitation, paired backup recovery, and the difference
+  between GitHub updates and marketplace-verified snapshots in public docs.
 - Use native Omarchy controls and theme colors in a content-sized Add dialog.
   App selection (click or Enter) advances directly to focused key capture.
   Rename shortcuts on the review page and expand command details when needed.

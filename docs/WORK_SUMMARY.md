@@ -2,8 +2,11 @@
 
 This describes repository work from 2026-09-28 and the UI follow-up on
 2026-09-29. A local test copy was installed at the user's request on September
-28. This is not a claim that the version is committed, published, or approved
-by reviewers.
+28. The implementation was subsequently committed and pushed as `48ee608`.
+Documentation-only follow-ups do not change its runtime behavior. GitHub
+availability is separate from marketplace publication; the current target and
+review/publication status are recorded in
+[update request #9280](https://github.com/omacom/omarchy-plugin-marketplace/issues/9280).
 
 ## New shortcut creation
 
@@ -140,4 +143,5 @@ See [Safety and recovery](SAFETY.md) for details.
 
 README, changelog, architecture, safety documentation, manifest, and release
 checks were updated along with the implementation. The previous v1.1.1 GitHub
-review and validation do not certify these new, unpublished changes.
+review and validation do not certify later commits. Marketplace reports apply
+only to their explicitly recorded SHA, not automatically to newer GitHub code.

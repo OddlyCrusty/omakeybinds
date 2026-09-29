@@ -72,7 +72,9 @@ The categories mean:
 - **Default** — active and unchanged from your installed Omarchy defaults.
 - **Changed** — a default key now performs another action, or an action moved.
 - **Custom** — an active user binding that has no default counterpart.
-- **Deleted** — a default binding explicitly unbound without a replacement.
+- **Deleted** — an inactive default or custom action retained for restoration,
+  including actions whose former key is now used by something else. A deleted
+  entry does not itself reserve that key.
 
 ### Add a shortcut
 
@@ -91,9 +93,11 @@ Select **+ Add**, then choose an action:
   operators are allowed, and it runs with your user permissions when pressed.
 
 Apps advance automatically when selected; other actions use **Continue**.
-Press the key combination, optionally change the **Shortcut name**, inspect
-**Command details**, then select **Save shortcut**. Nothing is launched during
-review or saving; this version has no test-launch button. A conflicting key
+Record the key combination, or use **Type a combination instead**. Optionally
+change the **Shortcut name**, inspect **Command details**, then select **Save
+shortcut**. The plugin does not deliberately launch the action during review
+or saving; see the [capture limitation](#known-capture-limitation) below before
+pressing an existing global shortcut. This version has no test-launch button. A conflicting key
 requires explicit replacement consent. Read-only, ambiguous, or physical-key
 alias conflicts require choosing a different combination.
 
@@ -111,7 +115,7 @@ does not install missing apps or continuously monitor their availability.
 
 ### Change a shortcut
 
-Select an editable row, press the new combination, then select **Apply
+Select an editable row, record or type the new combination, then select **Apply
 shortcut**. When the key is already used, OmaKeybinds lists the conflicting
 actions and keeps Apply blocked until you acknowledge the replacement.
 
@@ -127,8 +131,8 @@ The helper rechecks the selection and conflicts immediately before writing;
 if bindings changed since opening the editor, cancel and rescan first.
 
 During an edit dialog or the Add dialog's key-capture step, OmaKeybinds retains
-exclusive keyboard focus and requests temporary shortcut inhibition so an occupied combination does
-not launch its existing action. Closing the dialog or panel releases the
+exclusive keyboard focus and requests temporary shortcut inhibition to prevent
+an occupied combination from launching its existing action. Closing the dialog or panel releases the
 request. Wait until the capture box is ready before pressing keys. If protection
 is unavailable, the UI shows a warning and refuses to record keys. Compositor
 emergency shortcuts or explicitly inhibition-bypassing bindings may still run.
@@ -139,6 +143,25 @@ This works without chord recording and shows the same live-view conflicts.
 Deleted entries do not occupy keys. An occupied restore destination requires
 another combination; restoring never replaces its current owner.
 
+### Known capture limitation
+
+A desktop-specific report remains unresolved: pressing an occupied combination
+can launch its existing application instead of recording the keys and showing
+the conflict. Full-editor isolated tests pass, including
+`SUPER + CTRL + SHIFT + D`, but that does not prove the reported normal-desktop
+failure is fixed.
+
+If recording fails, the app launches, or the box says **Waiting for protected
+capture**, stop trying the chord. Choose **Type a combination instead** and
+type its names normally, such as `SUPER + CTRL + SHIFT + D`; do not hold those
+keys together. The typed path uses the same conflict checks. Cancel and rescan
+if bindings changed while the dialog was open.
+
+For a bug report, include whether this happened in Add or Change, the capture
+box message, reproduction steps, and your Omarchy/Hyprland/plugin versions.
+Remove private commands, paths, and credentials from any logs or screenshots;
+see [contributing](CONTRIBUTING.md).
+
 ### Delete a shortcut
 
 Select an editable row, choose **Delete shortcut**, then choose **Confirm
@@ -147,7 +170,9 @@ delete**. The shortcut is safely unbound and remains available in the
 
 Select a shortcut in the **Deleted** view to restore it. OmaKeybinds proposes
 its previous key combination. If that key is already occupied, restoration is
-blocked and the dialog asks you to press a different combination.
+blocked and the dialog asks you to record or type a different combination.
+For example, if deleted action A used `SUPER + J` and action B now uses it,
+restore A to a free key such as `SUPER + K`. B keeps `SUPER + J`.
 
 ### Reset every shortcut
 
@@ -191,11 +216,33 @@ then recreate the desired edits. Keep bindings and state backups together.
 
 ## Update
 
+Read the [release notes](CHANGELOG.md) and capture limitation before updating.
+In an interactive terminal, review and confirm the upstream changes:
+
 ```bash
-omarchy plugin update io.github.oddlycrusty.omakeybinds --yes
+omarchy plugin update io.github.oddlycrusty.omakeybinds
 ```
 
-Release notes are recorded in [CHANGELOG.md](CHANGELOG.md).
+Add `--yes` only to skip that confirmation. If updating reports local changes,
+back up and inspect the installed checkout; do not discard your changes just
+to force an update. This also applies to locally installed development copies.
+
+GitHub code and the marketplace-verified snapshot are different: current
+Omarchy install/update commands fetch upstream HEAD, which can be newer than
+the reviewed commit. A passing repository CI run is not marketplace approval.
+Compare the installed commit with the snapshot linked on the
+[marketplace listing](https://omarchyplugins.com/plugin.html?id=io.github.oddlycrusty.omakeybinds):
+
+```bash
+git -C ~/.config/omarchy/plugins/io.github.oddlycrusty.omakeybinds rev-parse HEAD
+git -C ~/.config/omarchy/plugins/io.github.oddlycrusty.omakeybinds status --short
+```
+
+A dirty checkout also differs from its reported commit. See the marketplace's
+[installation boundary](https://github.com/omacom/omarchy-plugin-marketplace/blob/main/VERIFICATION.md#installation-boundary).
+Updating a listing requires a separate exact-commit request; the current 1.2.0
+request and publication status are tracked in
+[#9280](https://github.com/omacom/omarchy-plugin-marketplace/issues/9280).
 
 ## Uninstall
 
@@ -204,6 +251,7 @@ remove only the block managed by OmaKeybinds while preserving all other custom
 bindings, run this from the installed plugin directory:
 
 ```bash
+cd ~/.config/omarchy/plugins/io.github.oddlycrusty.omakeybinds
 python3 remove_overrides.py
 omarchy plugin remove io.github.oddlycrusty.omakeybinds --yes
 ```
@@ -229,6 +277,8 @@ are checked without changing the installation.
 Architecture and data flow are documented in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Contributions are welcome; read
 [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+The [1.2.0 work summary](docs/WORK_SUMMARY.md) records implementation details,
+test coverage, and remaining manual checks.
 
 ## License
 
